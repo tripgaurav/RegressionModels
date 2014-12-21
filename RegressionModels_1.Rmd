@@ -1,0 +1,143 @@
+---
+title: "Regression Analysis of 'mtcars' dataset"
+author: "Gaurav Tripathi"
+output: pdf_document
+---
+
+## Introduction
+As an exployee for Motor Trend, a magazine about the automobile industry, I analysed the 'mtcars' dataset (a data set 32 cars across 11 measures, captured between 1974-1975), to explore the relationship between a set of variables and miles per gallon (MPG) (outcome). I have tried to answer the following two questions:
+
+1. "Is an automatic or manual transmission better for MPG"
+2. "Quantify the MPG difference between automatic and manual transmissions"
+
+## Executive Summary
+Following are the findings from the analysis:
+
+- The impact of manual vs. automatic transmission on MPG is statistically significant
+- Manual Transmission cars tend to have higher MPG than Automatic Transmission ones
+- However, as the car weight increases, with every 1000lb increase in weight, MPG for manual transmission cars falls faster than that for automatic transmission cars (all other factors remaining constant)
+- At about 2800lb weight, the MPG for both Manual and Automatic Transmission cars is same (all other factors remaining constant)
+- Below this weight, Manual Transmission Cars are better
+- Above this weight, Automatic Transmission Cars are better
+- Qsec (which indicates how fast car is driven) also impacts MPG in a significant way
+
+## Analysis and Data Processing
+First, the library "datasets" was loaded, and then "mtcars" dataset was copied into another variable cars_data. Next, correlation between variables was checked (results shown in Table 1) and the following was observed. This could potentially help when adding / removing variables to the regression model:
+
+- MPG seemed to be highly negatively correlated with Cyl, Disp, HP and WT
+- Cyl seemed to be highly correlated with Disp, HP, WT and VS (negatively)
+
+To check the high-level impact of transmission type, a box plot was drawn (Figure 1). It indicated that the impact is significant visually. But the same was tested for statistical significance too (assuming normal distribution and IID), using a Welch 2-sample T-test. A p-value of 0.0013 indicated that the different in impact was > 0 at least 95% times.
+
+Hence, **manual transmission cars are better than automatic transmission cars in 95% cases**.
+
+On closer analysis, it would be proved that the result obtained about was merely a start. A regression analysis between mpg (outcome) and am (variable) would give R-square of 0.36 only. Which means there is scope for addition of more variable, as well as for interaction between few variables. Hence, more models were chosen.
+
+Following code snippet demonstrates the logic used when selecting / Rejecting models:
+```{r, eval=FALSE}
+# AM is insignificant in models below
+summary(lm(mpg ~ am + cyl, data = cars_data))
+summary(lm(mpg ~ am + disp, data = cars_data))
+
+# The model below has the problem of Heteroscedasticity, as seen from Residuals plot
+summary(lm(mpg ~ am + hp, data = cars_data))
+fit <- lm(mpg ~ am + hp, data = cars_data)
+plot(fit)
+
+# New variables added are all insignificant
+summary(lm(mpg ~ am + hp + drat, data = cars_data))
+summary(lm(mpg ~ am + hp + qsec, data = cars_data))
+summary(lm(mpg ~ am + hp + vs, data = cars_data))
+summary(lm(mpg ~ am + hp + gear, data = cars_data))
+summary(lm(mpg ~ am + hp + carb, data = cars_data))
+
+# AM is insignificant in model below
+summary(lm(mpg ~ am + hp + wt, data = cars_data))
+
+# Since combinations with HP didn't work, removing that variable
+# AM is insignificant in model below
+summary(lm(mpg ~ am + wt, data = cars_data))
+```
+
+The model, which made sense was the one with high R2, AM as a significant variable, homoscedasticity, and no variable insignificant. Since none of the variable combinations chosen had helped, interaction variables were introduced. Interaction between AM and WT seemed to be interesting, a seen from regression analysis, as well as by plotting on a graph.
+
+```{r, eval=FALSE}
+# Model below seems to make logical sense -> MPG decrease with weight increase,
+# assuming transmission type is not changed
+summary(lm(mpg ~ am*wt, data = cars_data))
+
+# Same can be validated from the following chart
+plot(cars_data$wt, cars_data$mpg, col=cars_data$am, xlab = "Weight of car", ylab = "MPG")
+fit_am_wt <- lm(mpg ~ wt*am, data=cars_data)
+summary(fit_am_wt)
+abline(coef(fit_am_wt)[1], coef(fit_am_wt)[2])
+abline(coef(fit_am_wt)[1]+coef(fit_am_wt)[3], coef(fit_am_wt)[2]+coef(fit_am_wt)[4], col="red")
+```
+
+To see, if any other variable improved the R2, without compromising on the variable significance or homoscedasticity, multiple models were chosen. The results are as follows:
+```{r,eval=FALSE}
+summary(lm(mpg ~ am*wt + cyl, data = cars_data))    # R2 = 0.877
+summary(lm(mpg ~ am*wt + disp, data = cars_data))   # Wt insignificant
+summary(lm(mpg ~ am*wt + hp, data = cars_data))     # R2 = 0.87
+summary(lm(mpg ~ am*wt + drat, data = cars_data))   # Drat insignificant
+summary(lm(mpg ~ am*wt + qsec, data = cars_data))   # R2 = 0.90
+summary(lm(mpg ~ am*wt + vs, data = cars_data))     # R2 = 0.87
+summary(lm(mpg ~ am*wt + gear, data = cars_data))   # Gear insignificant
+summary(lm(mpg ~ am*wt + carb, data = cars_data))   # Carb insignificant
+```
+
+Only the model with interaction between AM and WT, and with QSEC added made sense. The results on running that model are shown in Table 3. Its plots are shown in Figure 2. Following are the takeaway from this model:
+
+- The model explains 90% of the results
+- Increase in WT decreases MPG of the car
+- Manual Transmission is better than Automatic Transmission
+- But with increase in WT, manual tranmission car's performance starts to decrease (by a factor of 4.141) per 1000lb increase in WT
+- There is no heteroscedasticity or outlier in the residual plot
+
+ANOVA analysis of model with and without interaction indicates significant different (since P < 0.05).
+VIF analysis of the 2 models indicates an increase in variance in the model with interaction, as compared to the one without interaction, but given all other benefits seem from the model, we can live with this variance. Detailed results for ANOVA and VIF analysis are shown in Table 4.
+
+## Appendix
+### Table 1
+```{r, results='hide', echo=FALSE, warning=FALSE}
+library(datasets)
+library(car)
+cars_data <- mtcars
+head(cars_data)
+```
+
+```{r, echo=FALSE, warning=FALSE}
+corr_var <- data.frame(round(cor(cars_data),2))
+corr_var
+```
+
+### Figure 1
+```{r, echo=FALSE}
+cars_data$am <- factor(x=cars_data$am, labels=c("Automatic", "Manual"))
+par(mfrow = c(1,2))
+plot(cars_data$am, cars_data$mpg, xlab = "Type of Transmission", ylab = "MPG", main="Impact of Transmission on MPG")
+```
+
+### Table 3
+```{r,echo=FALSE}
+summary(lm(mpg ~ am*wt + qsec, data = cars_data))$coef
+paste("R square:"); summary(lm(mpg ~ am*wt + qsec, data = cars_data))$r.squared
+```
+
+### Figure 2
+```{r,echo=FALSE}
+# Hence, improved model is the one with interaction between am and wt, and qsec variable added
+# This model below has high R2, all signifiant variables, and no heteroscedasticity. Hence it is selected
+fit_am_wt_qsec <- lm(mpg ~ am*wt + qsec, data = cars_data)
+par(mfrow=c(2,2), mar=c(6,5,2,4))
+plot(fit_am_wt_qsec)
+```
+
+### Table 4
+```{r,echo=FALSE}
+fit_am_wt_qsec_noint <- lm(mpg ~ am + wt + qsec, data = cars_data)
+anova(fit_am_wt_qsec, fit_am_wt_qsec_noint)
+paste("VIF analysis:")
+vif(fit_am_wt_qsec)
+vif(fit_am_wt_qsec_noint)
+```
